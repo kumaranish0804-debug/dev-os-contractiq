@@ -113,6 +113,58 @@ describe('ChatPanel', () => {
     expect(await screen.findAllByText('No page cited — verify this in the document.')).toHaveLength(1);
   });
 
+  it('attributes each answer to its source: label + Conversation chips; conversation answers need no page', async () => {
+    const msg = (id: string, role: 'user' | 'assistant', content: string, query_type: string | null, cited_pages: number[] = []) => ({
+      id, role, content, cited_pages, status: 'complete', query_type, created_at: '2026-10-18T10:00:00Z',
+    });
+    apiFetch.mockResolvedValue({
+      session_id: 's',
+      message_count: 6,
+      messages: [
+        msg('1', 'user', 'How long is the term?', 'contract'),
+        msg('2', 'assistant', 'Based on the document, two years [Page 2].', 'contract', [2]),
+        msg('3', 'user', 'What did you say earlier?', 'history'),
+        msg('4', 'assistant', 'I said the term is two years [Page 2]. [From conversation]', 'history', [2]),
+        msg('5', 'user', 'Earlier you mentioned renewal — what does the contract say?', 'both'),
+        msg('6', 'assistant', 'You asked about renewal [From conversation].', 'both'),
+      ],
+    });
+    renderChat();
+    await screen.findByText(/Based on the document, two years/);
+
+    const bubble = (text: RegExp) => screen.getByText(text).closest('li')!;
+    expect(within(bubble(/Based on the document, two years/)).getByText('From the contract')).toBeInTheDocument();
+    const history = bubble(/I said the term is two years/);
+    expect(within(history).getByText('From our conversation')).toBeInTheDocument();
+    expect(within(history).getByText('Conversation')).toHaveAttribute('title', 'From earlier in this conversation');
+    expect(within(history).queryByText(/\[From conversation\]/)).not.toBeInTheDocument();
+    expect(within(bubble(/You asked about renewal/)).getByText('Contract + conversation')).toBeInTheDocument();
+
+    // The BOTH answer is sourced from the conversation only, so no "no page cited" warning anywhere.
+    expect(screen.queryByText('No page cited — verify this in the document.')).not.toBeInTheDocument();
+    // User bubbles carry no source label.
+    expect(within(screen.getByText('How long is the term?').closest('li')!).queryByText('From the contract')).not.toBeInTheDocument();
+  });
+
+  it('labels a streamed answer as soon as the meta event classifies the question', async () => {
+    apiFetch.mockResolvedValue(EMPTY);
+    const sse = sseResponse();
+    callEdgeRaw.mockResolvedValue(sse.res);
+    const user = userEvent.setup();
+    renderChat();
+    await user.type(await screen.findByRole('textbox'), 'What did you say earlier?{Enter}');
+    await act(async () => {
+      sse.push('meta', { user_message_id: 'u-1', session_id: 's-1', query_type: 'history' });
+      sse.push('delta', { text: 'You asked about the term. [From conversation]' });
+    });
+    expect(await screen.findByText('From our conversation')).toBeInTheDocument();
+    await act(async () => {
+      sse.push('done', { message_id: 'a-1', cited_pages: [] });
+      sse.close();
+    });
+    expect(screen.queryByText('No page cited — verify this in the document.')).not.toBeInTheDocument();
+  });
+
   it('renders only safe markdown: no links or raw HTML', async () => {
     apiFetch.mockResolvedValue({
       session_id: 's',

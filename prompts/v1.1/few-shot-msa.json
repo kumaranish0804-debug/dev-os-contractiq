@@ -1,0 +1,86 @@
+[
+  {
+    "requested": [
+      "payment_terms",
+      "late_payment_penalty"
+    ],
+    "contract": "[PAGE 3]\n5.1 Customer shall pay all undisputed invoices within thirty (30) days of receipt.\n5.2 Overdue amounts accrue interest at 1.5% per month or the maximum rate permitted by law, whichever is lower.",
+    "output": {
+      "terms": [
+        {
+          "term_key": "payment_terms",
+          "term_name": "Payment Terms",
+          "value": "Undisputed invoices are due within 30 days of receipt.",
+          "page_number": 3,
+          "source_sentence": "5.1 Customer shall pay all undisputed invoices within thirty (30) days of receipt.",
+          "confidence_score": 0.96
+        },
+        {
+          "term_key": "late_payment_penalty",
+          "term_name": "Late Payment Penalty",
+          "value": "Interest of 1.5% per month (or the legal maximum, if lower) on overdue amounts.",
+          "page_number": 3,
+          "source_sentence": "5.2 Overdue amounts accrue interest at 1.5% per month or the maximum rate permitted by law, whichever is lower.",
+          "confidence_score": 0.95
+        }
+      ],
+      "detected_contract_type": "MSA"
+    }
+  },
+  {
+    "requested": [
+      "liability_cap",
+      "indemnification"
+    ],
+    "contract": "[PAGE 6]\n10.2 Except for breaches of confidentiality, each party's aggregate liability shall not exceed the fees paid in the twelve (12) months preceding the claim.\n\n[PAGE 7]\n11.1 Provider shall defend and indemnify Customer against third-party claims alleging that the Services infringe any intellectual property right.",
+    "output": {
+      "terms": [
+        {
+          "term_key": "liability_cap",
+          "term_name": "Liability Cap",
+          "value": "Fees paid in the 12 months before the claim; confidentiality breaches are excluded from the cap.",
+          "page_number": 6,
+          "source_sentence": "10.2 Except for breaches of confidentiality, each party's aggregate liability shall not exceed the fees paid in the twelve (12) months preceding the claim.",
+          "confidence_score": 0.93
+        },
+        {
+          "term_key": "indemnification",
+          "term_name": "Indemnification",
+          "value": "Provider indemnifies Customer against third-party IP infringement claims about the Services.",
+          "page_number": 7,
+          "source_sentence": "11.1 Provider shall defend and indemnify Customer against third-party claims alleging that the Services infringe any intellectual property right.",
+          "confidence_score": 0.91
+        }
+      ],
+      "detected_contract_type": "MSA"
+    }
+  },
+  {
+    "requested": [
+      "termination_clause",
+      "notice_period"
+    ],
+    "contract": "[PAGE 8]\n13.1 Either party may terminate this Agreement for convenience upon sixty (60) days' prior written notice.\n13.2 Either party may terminate immediately if the other party materially breaches and fails to cure within thirty (30) days.",
+    "output": {
+      "terms": [
+        {
+          "term_key": "termination_clause",
+          "term_name": "Termination Clause",
+          "value": "Either party may terminate for convenience on 60 days' written notice, or for uncured material breach after a 30-day cure period.",
+          "page_number": 8,
+          "source_sentence": "13.1 Either party may terminate this Agreement for convenience upon sixty (60) days' prior written notice.",
+          "confidence_score": 0.88
+        },
+        {
+          "term_key": "notice_period",
+          "term_name": "Notice Period",
+          "value": "60 days' prior written notice for termination for convenience.",
+          "page_number": 8,
+          "source_sentence": "13.1 Either party may terminate this Agreement for convenience upon sixty (60) days' prior written notice.",
+          "confidence_score": 0.8
+        }
+      ],
+      "detected_contract_type": "MSA"
+    }
+  }
+]

@@ -34,7 +34,7 @@ export async function GET(_request: Request, { params }: { params: { id: string 
 
     const { data: messages, error: messagesError } = await supabase
       .from('chat_messages')
-      .select('id, role, content, cited_pages, status, created_at')
+      .select('id, role, content, cited_pages, status, query_type, created_at')
       .eq('session_id', session.id)
       .order('created_at', { ascending: true })
       .limit(LIMITS.chatSessionMax);

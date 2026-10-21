@@ -1,7 +1,7 @@
 {
   "imports": {
     "@supabase/supabase-js": "npm:@supabase/supabase-js@2.45.4",
-    "openai": "npm:openai@4.68.1",
+    "openai": "npm:openai@4.104.0",
     "zod": "npm:zod@3.23.8",
     "unpdf": "npm:unpdf@0.12.1",
     "gpt-tokenizer/model/gpt-4o": "npm:gpt-tokenizer@2.5.1/model/gpt-4o",

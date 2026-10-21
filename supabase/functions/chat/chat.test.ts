@@ -1,10 +1,10 @@
 import { assert, assertEquals, assertRejects } from 'std/assert';
-import { buildChatMessages, CONTEXT_TOKEN_BUDGET, type HistoryMessage } from '../_shared/chat-context.ts';
+import { buildChatMessages, CONTEXT_TOKEN_BUDGET, lastTurns, type HistoryMessage } from '../_shared/chat-context.ts';
 import { AppError } from '../_shared/errors.ts';
-import { NOT_FOUND_IN_CONVERSATION, NOT_FOUND_IN_DOCUMENT } from '../_shared/pure/prompts-v1.ts';
+import { NOT_FOUND_IN_CONVERSATION, NOT_FOUND_IN_DOCUMENT } from '../_shared/pure/prompts.ts';
 import { fakeContext, fakeSupabase, type Call, type FakeOptions } from '../_shared/test-utils/fake-supabase.ts';
-import { apiError, readSseEvents, scriptedStream, type StreamStep } from '../_shared/test-utils/openai-mock.ts';
-import { CHAT_TIMINGS, handleChat, isCitationMiss, type ChatDeps } from './chat.ts';
+import { apiError, raw, scriptedComplete, type Step } from '../_shared/test-utils/llm-mock.ts';
+import { CHAT_TIMINGS, handleChat, isCitationMiss, type ChatDeps, type ChatResponse } from './chat.ts';
 
 const CONTRACT_ID = '88888888-8888-4888-8888-888888888888';
 const CONTRACT = {
@@ -24,7 +24,7 @@ const HISTORY = [
 let messageIds = 0;
 
 function setup(
-  steps: StreamStep[],
+  steps: Step[],
   over: {
     contract?: unknown;
     session?: unknown;
@@ -46,92 +46,131 @@ function setup(
     },
   };
   const fake = fakeSupabase(options);
-  const openai = scriptedStream(steps);
+  const agent = scriptedComplete(steps);
   const deps: ChatDeps = {
-    createStream: async () => ({ stream: openai.stream, model: 'gpt-4o-mini' }),
+    createComplete: async () => ({ complete: agent.complete, model: null }),
     now: () => Date.now(),
     sleep: () => Promise.resolve(),
     timings: { ...CHAT_TIMINGS, ...over.timings },
   };
-  return { fake, openai, deps, sessionSelects };
+  return { fake, agent, deps, sessionSelects };
 }
 
 const request = (body: unknown, signal?: AbortSignal) =>
   new Request('http://localhost/chat', { method: 'POST', body: JSON.stringify(body), signal });
 const ask = (message: string) => ({ contract_id: CONTRACT_ID, message });
 
+const chat = async (fake: ReturnType<typeof fakeSupabase>, deps: ChatDeps, body: unknown, signal?: AbortSignal) =>
+  (await (await handleChat(fakeContext(request(body, signal), fake.client), deps)).json()) as ChatResponse;
+
 const inserts = (calls: Call[], table: string) =>
   calls.filter((c): c is Extract<Call, { op: 'insert' }> => c.op === 'insert' && c.table === table);
 
-Deno.test('streams a grounded answer: meta → deltas → done, saves both messages and logs', async () => {
-  const { fake, openai, deps } = setup([
-    { deltas: ['Based on the document, ', 'the governing law is New York ', '[Page 3].'] },
-  ]);
+Deno.test('returns a grounded answer as JSON, saves both messages and logs', async () => {
+  const { fake, agent, deps } = setup([raw('Based on the document, the governing law is New York [Page 3].')]);
   const res = await handleChat(fakeContext(request(ask('What law governs this?')), fake.client), deps);
-  assertEquals(res.headers.get('content-type'), 'text/event-stream');
-  assertEquals(res.headers.get('cache-control'), 'no-cache');
+  assertEquals(res.headers.get('content-type'), 'application/json');
+  assertEquals(res.headers.get('cache-control'), 'no-store');
 
-  const events = await readSseEvents(res);
-  assertEquals(events.map((e) => e.event), ['meta', 'delta', 'delta', 'delta', 'done']);
-  assertEquals((events[0]!.data as Record<string, unknown>).query_type, 'contract');
-  assertEquals((events.at(-1)!.data as Record<string, unknown>).cited_pages, [3]);
+  const body = (await res.json()) as ChatResponse;
+  assertEquals(body.query_type, 'contract');
+  assertEquals(body.content, 'Based on the document, the governing law is New York [Page 3].');
+  assertEquals(body.cited_pages, [3]);
+  assertEquals(body.session_id, 's-1');
+  assert(body.user_message_id && body.assistant_message_id);
 
   const [userMsg, assistantMsg] = inserts(fake.calls, 'chat_messages');
   assertEquals(userMsg!.row, { session_id: 's-1', user_id: 'user-1', role: 'user', content: 'What law governs this?', query_type: 'contract' });
-  assertEquals(assistantMsg!.row.content, 'Based on the document, the governing law is New York [Page 3].');
+  assertEquals(assistantMsg!.row.content, body.content);
   assertEquals(assistantMsg!.row.cited_pages, [3]);
   assertEquals(assistantMsg!.row.status, 'complete');
 
   const [log] = inserts(fake.calls, 'processing_logs');
   assertEquals(log!.row.kind, 'chat');
   assertEquals(log!.row.success, true);
-  assertEquals(log!.row.model, 'gpt-4o-mini');
+  assertEquals(log!.row.model, 'gpt-4o-mini'); // as reported by the agent response
   assert((log!.row.cost_usd as number) > 0);
 
   // Context: system with the contract, completed history only, then the question.
-  const sent = openai.calls[0]!.messages;
+  const sent = agent.calls[0]!.messages;
   assert(sent[0]!.content.includes('<contract>\n[PAGE 1]\nParties.'));
   assertEquals(sent.slice(1).map((m) => m.role), ['user', 'assistant', 'user', 'user']);
   assertEquals(sent.at(-1), { role: 'user', content: 'What law governs this?' });
   assert(!sent.some((m) => m.content === 'partial'));
+  assertEquals(agent.calls[0]!.options.json, false);
 });
 
 Deno.test('an off-document question gets the exact not-found reply with no citations', async () => {
-  const { fake, deps } = setup([{ deltas: [NOT_FOUND_IN_DOCUMENT] }]);
-  const events = await readSseEvents(
-    await handleChat(fakeContext(request(ask("What's the capital of France?")), fake.client), deps),
-  );
-  const done = events.at(-1)!;
-  assertEquals(done.event, 'done');
-  assertEquals((done.data as Record<string, unknown>).cited_pages, []);
+  const { fake, deps } = setup([raw(NOT_FOUND_IN_DOCUMENT)]);
+  const body = await chat(fake, deps, ask("What's the capital of France?"));
+  assertEquals(body.cited_pages, []);
   assertEquals(inserts(fake.calls, 'chat_messages')[1]!.row.content, NOT_FOUND_IN_DOCUMENT);
 });
 
 Deno.test('"What did you say earlier about termination?" is classified both', async () => {
-  const { fake, openai, deps } = setup([{ deltas: ['Based on the document, ...'] }]);
-  const events = await readSseEvents(
-    await handleChat(fakeContext(request(ask('What did you say earlier about termination?')), fake.client), deps),
-  );
-  assertEquals((events[0]!.data as Record<string, unknown>).query_type, 'both');
-  assert(openai.calls[0]!.messages[0]!.content.includes('</contract> and our previous messages in this conversation.'));
+  const { fake, agent, deps } = setup([raw('Based on the document, ...')]);
+  const body = await chat(fake, deps, ask('What did you say earlier about termination?'));
+  assertEquals(body.query_type, 'both');
+  const system = agent.calls[0]!.messages[0]!.content;
+  assert(system.includes('Attribute every fact to its source'));
+  assert(system.includes('<contract>\n[PAGE 1]\nParties.'));
+});
+
+Deno.test('history is loaded BEFORE the new question is saved, so the question never classifies itself', async () => {
+  // A stateful chat_messages table: selects see exactly what has been inserted so far.
+  const table: Record<string, unknown>[] = [];
+  const fake = fakeSupabase({
+    query: {
+      contracts: () => ({ data: CONTRACT }),
+      chat_sessions: () => ({ data: { id: 's-1', message_count: 0 } }),
+      chat_messages: (call) => {
+        if (call.op === 'select') return { data: table.map((r) => ({ ...r, status: r.status ?? 'complete' })) };
+        if (call.op === 'insert') {
+          table.push(call.row);
+          return { data: { id: `m-${table.length}` } };
+        }
+        return undefined;
+      },
+    },
+  });
+  const agent = scriptedComplete([raw('Based on the document, nothing earlier [Page 1].')]);
+  const deps: ChatDeps = {
+    createComplete: async () => ({ complete: agent.complete, model: null }),
+    now: () => Date.now(),
+    sleep: () => Promise.resolve(),
+  };
+
+  // First message of a session, phrased like a history question. Saved before loading, it would be
+  // its own history and classify as HISTORY; loaded first, there is no history, so it is CONTRACT.
+  const body = await chat(fake, deps, ask('What did you say earlier?'));
+  assertEquals(body.query_type, 'contract');
+
+  const order = fake.calls
+    .filter((c) => (c.op === 'select' || c.op === 'insert') && 'table' in c && c.table === 'chat_messages')
+    .map((c) => c.op);
+  assertEquals(order.slice(0, 2), ['select', 'insert']);
+
+  const sent = agent.calls[0]!.messages;
+  assertEquals(sent.filter((m) => m.content === 'What did you say earlier?').length, 1);
+  assertEquals(sent.at(-1), { role: 'user', content: 'What did you say earlier?' });
 });
 
 Deno.test('creates the session on first message, and re-selects after a creation race', async () => {
-  const first = setup([{ deltas: ['ok'] }], { session: null });
-  await readSseEvents(await handleChat(fakeContext(request(ask('Q')), first.fake.client), first.deps));
+  const first = setup([raw('ok')], { session: null });
+  await chat(first.fake, first.deps, ask('Q'));
   assertEquals(inserts(first.fake.calls, 'chat_sessions')[0]!.row, { contract_id: CONTRACT_ID, user_id: 'user-1' });
   assertEquals(inserts(first.fake.calls, 'chat_messages')[0]!.row.session_id, 's-new');
 
-  const race = setup([{ deltas: ['ok'] }], {
+  const race = setup([raw('ok')], {
     session: null,
     sessionInsert: { error: { message: 'duplicate', code: '23505' } },
   });
   race.sessionSelects.push({ id: 's-raced', message_count: 2 });
-  await readSseEvents(await handleChat(fakeContext(request(ask('Q')), race.fake.client), race.deps));
+  await chat(race.fake, race.deps, ask('Q'));
   assertEquals(inserts(race.fake.calls, 'chat_messages')[0]!.row.session_id, 's-raced');
 });
 
-Deno.test('pre-stream errors return the JSON envelope (no message stored)', async () => {
+Deno.test('pre-call errors throw the envelope code (no message stored)', async () => {
   const cases: [Parameters<typeof setup>[1], unknown, string][] = [
     [{ contract: null }, ask('Q'), 'NOT_FOUND'],
     [{ contract: { ...CONTRACT, status: 'processing' } }, ask('Q'), 'CONTRACT_NOT_READY'],
@@ -149,67 +188,88 @@ Deno.test('pre-stream errors return the JSON envelope (no message stored)', asyn
 });
 
 Deno.test('the contract query is scoped to the caller', async () => {
-  const { fake, deps } = setup([{ deltas: ['ok'] }]);
-  await readSseEvents(await handleChat(fakeContext(request(ask('Q')), fake.client), deps));
+  const { fake, deps } = setup([raw('ok')]);
+  await chat(fake, deps, ask('Q'));
   const select = fake.calls.find((c) => c.op === 'select' && c.table === 'contracts');
   assert(select?.op === 'select');
   assertEquals(select.filters, [['id', CONTRACT_ID], ['user_id', 'user-1']]);
 });
 
-Deno.test('retries before the first token (503 → 503 → stream)', async () => {
-  const { fake, openai, deps } = setup([apiError(503), apiError(503), { deltas: ['Based on the document, fine [Page 1].'] }]);
-  const events = await readSseEvents(await handleChat(fakeContext(request(ask('Q')), fake.client), deps));
-  assertEquals(events.at(-1)!.event, 'done');
-  assertEquals(openai.calls.length, 3);
+Deno.test('retries transient agent errors (503 → 503 → answer)', async () => {
+  const { fake, agent, deps } = setup([apiError(503), apiError(503), raw('Based on the document, fine [Page 1].')]);
+  const body = await chat(fake, deps, ask('Q'));
+  assertEquals(body.cited_pages, [1]);
+  assertEquals(agent.calls.length, 3);
   assertEquals(inserts(fake.calls, 'processing_logs')[0]!.row.attempts, 3);
 });
 
-Deno.test('a failure mid-stream sends error, keeps the partial as status error, logs failure', async () => {
-  const { fake, openai, deps } = setup([{ deltas: ['Based on the', ' document'], failAfter: apiError(502) }]);
-  const events = await readSseEvents(await handleChat(fakeContext(request(ask('Q')), fake.client), deps));
-  assertEquals(events.map((e) => e.event), ['meta', 'delta', 'delta', 'error']);
-  assertEquals((events.at(-1)!.data as Record<string, unknown>).code, 'AI_UNAVAILABLE');
-  assertEquals(openai.calls.length, 1); // no retry once tokens were sent
+Deno.test('an agent failure saves an error answer, logs failure and throws AI_UNAVAILABLE', async () => {
+  const { fake, deps } = setup([apiError(502), apiError(502), apiError(502)]);
+  const error = await assertRejects(() => handleChat(fakeContext(request(ask('Q')), fake.client), deps), AppError);
+  assertEquals(error.code, 'AI_UNAVAILABLE');
 
   const assistant = inserts(fake.calls, 'chat_messages')[1]!;
   assertEquals(assistant.row.status, 'error');
-  assertEquals(assistant.row.content, 'Based on the document');
-  assertEquals(inserts(fake.calls, 'processing_logs')[0]!.row.success, false);
+  assertEquals(assistant.row.content, '');
+  const [log] = inserts(fake.calls, 'processing_logs');
+  assertEquals(log!.row.success, false);
+  assertEquals(log!.row.error_code, 'AI_UNAVAILABLE');
 });
 
-Deno.test('no first token in time → AI_TIMEOUT, with heartbeats while waiting', async () => {
-  const { fake, deps } = setup(['hang'], { timings: { firstTokenMs: 60, heartbeatMs: 15 } });
-  const events = await readSseEvents(await handleChat(fakeContext(request(ask('Q')), fake.client), deps));
-  assert(events.some((e) => e.event === 'ping'), 'expected heartbeat comments');
-  const last = events.at(-1)!;
-  assertEquals(last.event, 'error');
-  assertEquals((last.data as Record<string, unknown>).code, 'AI_TIMEOUT');
+Deno.test('a 4xx from the agent (bad key, endpoint or api-version) is not retried', async () => {
+  const { fake, agent, deps } = setup([apiError(401)]);
+  const error = await assertRejects(() => handleChat(fakeContext(request(ask('Q')), fake.client), deps), AppError);
+  assertEquals(error.code, 'INTERNAL');
+  assertEquals(agent.calls.length, 1);
+});
+
+Deno.test('upstream error text is returned only when ENVIRONMENT=development', async () => {
+  const previous = Deno.env.get('ENVIRONMENT');
+  try {
+    Deno.env.set('ENVIRONMENT', 'development');
+    const dev = setup([apiError(405)]);
+    const devError = await assertRejects(() => handleChat(fakeContext(request(ask('Q')), dev.fake.client), dev.deps), AppError);
+    assertEquals(devError.details, { upstream: 'HTTP 405' });
+
+    Deno.env.set('ENVIRONMENT', 'production');
+    const prod = setup([apiError(405)]);
+    const prodError = await assertRejects(() => handleChat(fakeContext(request(ask('Q')), prod.fake.client), prod.deps), AppError);
+    assertEquals(prodError.details, undefined);
+  } finally {
+    if (previous === undefined) Deno.env.delete('ENVIRONMENT');
+    else Deno.env.set('ENVIRONMENT', previous);
+  }
+});
+
+Deno.test('an empty agent answer is an error, not a blank reply', async () => {
+  const { fake, deps } = setup([raw('   ')]);
+  const error = await assertRejects(() => handleChat(fakeContext(request(ask('Q')), fake.client), deps), AppError);
+  assertEquals(error.code, 'AI_UNAVAILABLE');
+  assertEquals(inserts(fake.calls, 'chat_messages')[1]!.row.status, 'error');
+});
+
+Deno.test('no answer in time → AI_TIMEOUT', async () => {
+  const { fake, deps } = setup(['hang'], { timings: { totalMs: 30 } });
+  const error = await assertRejects(() => handleChat(fakeContext(request(ask('Q')), fake.client), deps), AppError);
+  assertEquals(error.code, 'AI_TIMEOUT');
   assertEquals(inserts(fake.calls, 'processing_logs')[0]!.row.error_code, 'AI_TIMEOUT');
 });
 
-Deno.test('missing OpenAI configuration surfaces as a streamed error, not a crash', async () => {
+Deno.test('missing Azure configuration surfaces as an error, not a crash', async () => {
   const { fake, deps } = setup([]);
-  deps.createStream = () => Promise.reject(new AppError('INTERNAL'));
-  const events = await readSseEvents(await handleChat(fakeContext(request(ask('Q')), fake.client), deps));
-  assertEquals(events.map((e) => e.event), ['meta', 'error']);
-  assertEquals((events[1]!.data as Record<string, unknown>).code, 'INTERNAL');
+  deps.createComplete = () => Promise.reject(new AppError('INTERNAL'));
+  const error = await assertRejects(() => handleChat(fakeContext(request(ask('Q')), fake.client), deps), AppError);
+  assertEquals(error.code, 'INTERNAL');
+  assertEquals(inserts(fake.calls, 'chat_messages')[1]!.row.status, 'error');
 });
 
-Deno.test('client disconnect aborts OpenAI, stores the partial, sends nothing more', async () => {
+Deno.test('client disconnect aborts the agent call and logs CLIENT_ABORTED', async () => {
   const controller = new AbortController();
   const { fake, deps } = setup(['hang']);
-  const res = await handleChat(fakeContext(request(ask('Q'), controller.signal), fake.client), deps);
-  const reader = res.body!.getReader();
-  await reader.read(); // meta
-  controller.abort();
-  let rest = '';
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    rest += new TextDecoder().decode(value);
-  }
-  assert(!rest.includes('event: error'));
+  const pending = assertRejects(() => handleChat(fakeContext(request(ask('Q'), controller.signal), fake.client), deps), AppError);
   await new Promise((r) => setTimeout(r, 10));
+  controller.abort();
+  await pending;
   assertEquals(inserts(fake.calls, 'chat_messages')[1]!.row.status, 'error');
   assertEquals(inserts(fake.calls, 'processing_logs')[0]!.row.error_code, 'CLIENT_ABORTED');
 });
@@ -224,10 +284,46 @@ const history = (pairs: number): HistoryMessage[] =>
     { role: 'assistant' as const, content: `a${i}`, status: 'complete' as const },
   ]).flat();
 
-Deno.test('history-only questions omit the contract from the system prompt', () => {
+Deno.test('history-only questions omit the contract and must end with [From conversation]', () => {
   const messages = buildChatMessages({ queryType: 'history', contractType: 'NDA', contractText: 'SECRET TEXT', history: history(1), question: 'What did you say before?' });
   assert(!messages[0]!.content.includes('SECRET TEXT'));
   assert(messages[0]!.content.includes('earlier conversation'));
+  assert(messages[0]!.content.includes('End your answer with [From conversation].'));
+});
+
+Deno.test('turn caps: CONTRACT and BOTH send the last 10 turns, HISTORY up to 20', () => {
+  const sentHistory = (queryType: 'contract' | 'both' | 'history', pairs: number) =>
+    buildChatMessages({ queryType, contractType: 'NDA', contractText: 'C', history: history(pairs), question: 'Q' })
+      .slice(1, -1)
+      .map((m) => m.content);
+
+  for (const type of ['contract', 'both'] as const) {
+    const kept = sentHistory(type, 15);
+    assertEquals(kept.length, 20);
+    assertEquals([kept[0], kept.at(-1)], ['q5', 'a14']);
+    assertEquals(sentHistory(type, 3).length, 6); // fewer than the cap → everything
+  }
+  const kept = sentHistory('history', 25);
+  assertEquals(kept.length, 40);
+  assertEquals([kept[0], kept.at(-1)], ['q5', 'a24']);
+});
+
+Deno.test('lastTurns keeps whole turns, drops failed answers first, and never starts on an answer', () => {
+  const msgs = (...roles: ('user' | 'assistant')[]) => roles.map((role, i) => ({ role, content: `${role[0]}${i}` }));
+  assertEquals(lastTurns(msgs('user', 'assistant', 'user', 'assistant', 'user', 'assistant'), 2).map((m) => m.content), ['u2', 'a3', 'u4', 'a5']);
+  // A question whose answer failed is still a turn (question only).
+  assertEquals(lastTurns(msgs('user', 'assistant', 'user', 'user', 'assistant'), 2).map((m) => m.content), ['u2', 'u3', 'a4']);
+  assertEquals(lastTurns(msgs('assistant', 'user', 'assistant'), 10).map((m) => m.content), ['u1', 'a2']);
+  assertEquals(lastTurns([], 10), []);
+
+  const withFailure: HistoryMessage[] = [
+    { role: 'user', content: 'q0', status: 'complete' },
+    { role: 'assistant', content: 'partial', status: 'error' },
+    { role: 'user', content: 'q1', status: 'complete' },
+    { role: 'assistant', content: 'a1', status: 'complete' },
+  ];
+  const sent = buildChatMessages({ queryType: 'contract', contractType: 'NDA', contractText: 'C', history: withFailure, question: 'Q' });
+  assertEquals(sent.slice(1, -1).map((m) => m.content), ['q0', 'q1', 'a1']);
 });
 
 Deno.test('over budget, the oldest history pairs are dropped; the contract is kept whole', () => {
@@ -245,14 +341,14 @@ Deno.test('over budget, the oldest history pairs are dropped; the contract is ke
 });
 
 Deno.test('NO_CITATION is logged for an uncited answer, but not for the not-found reply', async () => {
-  const uncited = setup([{ deltas: ['Based on the document, the term is two years.'] }]);
-  await readSseEvents(await handleChat(fakeContext(request(ask('How long is the term?')), uncited.fake.client), uncited.deps));
+  const uncited = setup([raw('Based on the document, the term is two years.')]);
+  await chat(uncited.fake, uncited.deps, ask('How long is the term?'));
   const [missLog] = inserts(uncited.fake.calls, 'processing_logs');
   assertEquals(missLog!.row.success, true);
   assertEquals(missLog!.row.error_code, 'NO_CITATION');
 
-  const notFound = setup([{ deltas: [NOT_FOUND_IN_DOCUMENT] }]);
-  await readSseEvents(await handleChat(fakeContext(request(ask("What's the capital of France?")), notFound.fake.client), notFound.deps));
+  const notFound = setup([raw(NOT_FOUND_IN_DOCUMENT)]);
+  await chat(notFound.fake, notFound.deps, ask("What's the capital of France?"));
   assertEquals(inserts(notFound.fake.calls, 'processing_logs')[0]!.row.error_code, null);
 });
 
@@ -262,4 +358,7 @@ Deno.test('isCitationMiss: cited, not-found and history answers are not misses',
   assertEquals(isCitationMiss(`  ${NOT_FOUND_IN_DOCUMENT}\n`, [], 'both'), false);
   assertEquals(isCitationMiss(NOT_FOUND_IN_CONVERSATION, [], 'contract'), false);
   assertEquals(isCitationMiss('Earlier I said the term is two years.', [], 'history'), false);
+  // BOTH: an answer sourced only from the conversation is attributed, not a miss; unattributed is.
+  assertEquals(isCitationMiss('You asked about renewal earlier [From conversation].', [], 'both'), false);
+  assertEquals(isCitationMiss('You asked about renewal earlier.', [], 'both'), true);
 });

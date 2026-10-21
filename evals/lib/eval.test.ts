@@ -1,7 +1,7 @@
 import { assert, assertAlmostEquals, assertEquals, assertStringIncludes, assertThrows } from 'std/assert';
 import { existsSync } from 'node:fs';
 import { fromFileUrl } from 'std/path';
-import { NOT_FOUND_IN_DOCUMENT } from '../../supabase/functions/_shared/pure/prompts-v1.ts';
+import { NOT_FOUND_IN_DOCUMENT, PROMPT_VERSION } from '../../supabase/functions/_shared/pure/prompts.ts';
 import { parseArgs } from '../run-eval.ts';
 import { loadDataset } from './dataset.ts';
 import {
@@ -132,7 +132,7 @@ Deno.test('summarise + renderMarkdown: failed contracts count as misses; report 
 
 Deno.test('parseArgs', () => {
   assertEquals(parseArgs(['--type', 'NDA', '--limit', '5', '--with-chat', '--gate', 'launch']), {
-    type: 'NDA', limit: 5, promptVersion: 'v1', withChat: true, gate: 'launch', dataset: 'evals/datasets',
+    type: 'NDA', limit: 5, promptVersion: PROMPT_VERSION, withChat: true, gate: 'launch', dataset: 'evals/datasets',
   });
   assertThrows(() => parseArgs(['--type', 'LEASE']));
   assertThrows(() => parseArgs(['--gate', 'alpha']));

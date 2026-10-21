@@ -1,7 +1,7 @@
 // Eval metrics (Spec 12 §12.9). Pure functions over gold/predicted terms and chat answers, so the
 // scoring itself is unit-tested without OpenAI.
 import { percentileCont } from '../../supabase/functions/_shared/metrics.ts';
-import { NOT_FOUND_IN_DOCUMENT } from '../../supabase/functions/_shared/pure/prompts-v1.ts';
+import { NOT_FOUND_IN_DOCUMENT } from '../../supabase/functions/_shared/pure/prompts.ts';
 
 export type GoldTerm = { value: string | null; page: number | null };
 export type PredictedTerm = { value: string | null; page: number | null; confidence: number };

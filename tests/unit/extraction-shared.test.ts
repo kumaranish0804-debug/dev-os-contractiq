@@ -8,7 +8,7 @@ import {
   FEW_SHOT_MSA,
   FEW_SHOT_NDA,
   PROMPT_VERSION,
-} from '@shared/prompts-v1';
+} from '@shared/prompts';
 import {
   customTermDef,
   getStandardTerms,

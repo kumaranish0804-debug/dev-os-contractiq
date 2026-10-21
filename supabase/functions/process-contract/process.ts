@@ -3,7 +3,8 @@ import { AppError, ERROR_CATALOGUE } from '../_shared/errors.ts';
 import { newMeter, runExtraction, type ExtractionMeter } from '../_shared/extraction.ts';
 import type { HandlerContext } from '../_shared/handler.ts';
 import { log } from '../_shared/logging.ts';
-import { createOpenAIComplete, hashUserId, type CompleteFn } from '../_shared/openai.ts';
+import { createAzureAgentComplete } from '../_shared/azure-agent.ts';
+import type { CompleteFn } from '../_shared/llm.ts';
 import { PROMPT_VERSION } from '../_shared/prompt-builder.ts';
 import { isStandardTermName } from '../_shared/pure/term-library.ts';
 import { processContractSchema, type ProcessContractInput } from '../_shared/schemas.ts';
@@ -12,23 +13,24 @@ import { env } from '../_shared/supabase.ts';
 // Spec 06 §6.5: validate → start_processing → runExtraction → save_extraction_results → log.
 
 export type ProcessDeps = {
-  /** Builds the model client for this user. Reads secrets lazily, inside the failure path. */
-  createComplete: (userId: string) => Promise<{ complete: CompleteFn; model: string }>;
+  /**
+   * Builds the extraction agent client. Reads secrets lazily, inside the failure path. `model`
+   * prices the call only when the agent's response does not name its model.
+   */
+  createComplete: () => Promise<{ complete: CompleteFn; model: string | null }>;
   now: () => number;
   sleep?: (ms: number) => Promise<void>;
 };
 
 export const defaultDeps: ProcessDeps = {
-  createComplete: async (userId) => {
-    const model = env('OPENAI_MODEL');
-    const complete = createOpenAIComplete({
-      apiKey: env('OPENAI_API_KEY'),
-      model,
-      baseURL: Deno.env.get('OPENAI_BASE_URL') || undefined,
-      userHash: await hashUserId(userId, env('OPENAI_USER_HASH_SALT')),
-    });
-    return { complete, model };
-  },
+  createComplete: async () => ({
+    complete: createAzureAgentComplete({
+      apiKey: env('AZURE_API_KEY'),
+      endpoint: env('AZURE_EXTRACTION_AGENT_ENDPOINT'),
+      apiVersion: Deno.env.get('AZURE_API_VERSION') || undefined,
+    }),
+    model: Deno.env.get('AZURE_EXTRACTION_MODEL') || null,
+  }),
   now: () => Date.now(),
 };
 
@@ -74,7 +76,9 @@ async function logExtraction(
     errorCode?: string;
   },
 ): Promise<void> {
-  const { meter, model } = fields;
+  const { meter } = fields;
+  // The agent names its model per response; the configured fallback covers responses that don't.
+  const model = meter.model ?? fields.model;
   let cost = 0;
   if (model) {
     const priced = costUsd(model, meter.prompt, meter.cached, meter.completion);
@@ -122,7 +126,7 @@ export async function handleProcess(ctx: HandlerContext, deps: ProcessDeps = def
   const meter = newMeter();
   let model: string | null = null;
   try {
-    const client = await deps.createComplete(ctx.userId);
+    const client = await deps.createComplete();
     model = client.model;
 
     const result = await runExtraction({

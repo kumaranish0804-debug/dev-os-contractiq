@@ -1,4 +1,5 @@
-// `[Page N]` citations in chat answers (Spec 09 §9.6). Pure module: zero imports.
+// `[Page N]` citations and `[From conversation]` attributions in chat answers (Spec 09 §9.6).
+// Pure module: zero imports.
 
 export const CITATION_RE = /\[Pages?\s+(\d+(?:\s*(?:,|and|&|-|–)\s*\d+)*)\]/gi;
 
@@ -31,16 +32,27 @@ export function parseCitations(text: string, pageCount: number): number[] {
   return [...pages].sort((a, b) => a - b);
 }
 
-export type CitationSegment = { type: 'text'; value: string } | { type: 'citation'; page: number };
+/** Attribution for facts taken from earlier messages (prompt v1.1 HISTORY and BOTH answers). */
+export const CONVERSATION_TAG_RE = /\[From (?:the |our )?conversation\]/gi;
 
-/** Splits text into plain runs and one citation segment per cited page (for rendering chips). */
+export const hasConversationAttribution = (text: string): boolean => new RegExp(CONVERSATION_TAG_RE.source, 'i').test(text);
+
+export type CitationSegment =
+  | { type: 'text'; value: string }
+  | { type: 'citation'; page: number }
+  | { type: 'conversation' };
+
+const ANY_ATTRIBUTION_RE = new RegExp(`${CITATION_RE.source}|${CONVERSATION_TAG_RE.source}`, 'gi');
+
+/** Splits text into plain runs, one segment per cited page, and conversation tags (for chips). */
 export function splitCitations(text: string): CitationSegment[] {
   const out: CitationSegment[] = [];
   let last = 0;
-  for (const match of text.matchAll(CITATION_RE)) {
+  for (const match of text.matchAll(ANY_ATTRIBUTION_RE)) {
     const index = match.index!;
     if (index > last) out.push({ type: 'text', value: text.slice(last, index) });
-    for (const page of expandCitation(match[1]!)) out.push({ type: 'citation', page });
+    if (match[1] === undefined) out.push({ type: 'conversation' });
+    else for (const page of expandCitation(match[1])) out.push({ type: 'citation', page });
     last = index + match[0].length;
   }
   if (last < text.length) out.push({ type: 'text', value: text.slice(last) });

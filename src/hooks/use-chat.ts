@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { LIMITS } from '@shared/limits';
+import type { QueryType } from '@shared/query-classifier';
 import { ApiError } from '@/lib/api/api-error';
 import { callEdgeRaw } from '@/lib/api/edge';
 import { apiFetch } from '@/lib/api/http';
@@ -18,6 +19,8 @@ export type ChatMessage = {
   content: string;
   cited_pages: number[];
   status: 'complete' | 'error';
+  /** Where the answer came from (the question's classification); null on rows saved without one. */
+  query_type: QueryType | null;
   created_at: string;
   /** Client-only state for the in-flight answer. */
   streaming?: boolean;
@@ -31,6 +34,8 @@ export type ChatHistory = { session_id: string | null; message_count: number; me
 
 
 let tempId = 0;
+
+const isQueryType = (v: unknown): v is QueryType => v === 'contract' || v === 'history' || v === 'both';
 
 /**
  * History (`['chat', id]`, never stale — kept current locally) plus streaming send/stop
@@ -79,8 +84,8 @@ export function useChat(contractId: string, enabled: boolean) {
         ...h,
         messages: [
           ...h.messages,
-          { id: userId, role: 'user', content: text, cited_pages: [], status: 'complete', created_at: now },
-          { id: assistantId, role: 'assistant', content: '', cited_pages: [], status: 'complete', created_at: now, streaming: true, question: text },
+          { id: userId, role: 'user', content: text, cited_pages: [], status: 'complete', query_type: null, created_at: now },
+          { id: assistantId, role: 'assistant', content: '', cited_pages: [], status: 'complete', query_type: null, created_at: now, streaming: true, question: text },
         ],
       }));
 
@@ -97,7 +102,9 @@ export function useChat(contractId: string, enabled: boolean) {
           const payload = data as Record<string, unknown>;
           if (event === 'meta') {
             const realId = String(payload.user_message_id);
-            patchMessage(userId, { id: realId });
+            const queryType = isQueryType(payload.query_type) ? payload.query_type : null;
+            patchMessage(userId, { id: realId, query_type: queryType });
+            patchMessage(assistantId, { query_type: queryType });
           } else if (event === 'delta') {
             patchMessage(assistantId, (m) => ({ content: m.content + String(payload.text ?? '') }));
           } else if (event === 'done') {

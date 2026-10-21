@@ -1,9 +1,11 @@
 'use client';
 
 import ReactMarkdown, { type Components } from 'react-markdown';
-import { AlertCircle, AlertTriangle } from 'lucide-react';
-import { NOT_FOUND_IN_CONVERSATION, NOT_FOUND_IN_DOCUMENT } from '@shared/prompts-v1';
-import { CitationChip } from '@/components/chat/CitationChip';
+import { AlertCircle, AlertTriangle, FileText, MessagesSquare } from 'lucide-react';
+import { hasConversationAttribution } from '@shared/citations';
+import { NOT_FOUND_IN_CONVERSATION, NOT_FOUND_IN_DOCUMENT } from '@shared/prompts';
+import type { QueryType } from '@shared/query-classifier';
+import { CitationChip, ConversationChip } from '@/components/chat/CitationChip';
 import { Button } from '@/components/ui/Button';
 import type { ChatMessage as Message } from '@/hooks/use-chat';
 import { remarkCitations } from '@/lib/chat/remark-citations';
@@ -15,6 +17,7 @@ const ALLOWED = ['p', 'strong', 'em', 'ul', 'ol', 'li', 'br', 'code', 'cite'];
 
 const components: Components = {
   cite: ({ node }) => {
+    if (node?.properties?.dataSource === 'conversation') return <ConversationChip />;
     const page = Number(node?.properties?.dataPage);
     return Number.isInteger(page) ? <CitationChip page={page} /> : null;
   },
@@ -25,6 +28,25 @@ const components: Components = {
 };
 
 const NOT_FOUND = new Set([NOT_FOUND_IN_DOCUMENT, NOT_FOUND_IN_CONVERSATION]);
+
+const SOURCES: Record<QueryType, { label: string; icons: (typeof FileText)[] }> = {
+  contract: { label: 'From the contract', icons: [FileText] },
+  history: { label: 'From our conversation', icons: [MessagesSquare] },
+  both: { label: 'Contract + conversation', icons: [FileText, MessagesSquare] },
+};
+
+/** Where the answer came from — the question's classification (conversation memory layer). */
+function SourceLabel({ queryType }: { queryType: QueryType }) {
+  const { label, icons } = SOURCES[queryType];
+  return (
+    <p className="flex items-center gap-1 text-body-sm text-text-secondary">
+      {icons.map((Icon, i) => (
+        <Icon key={i} aria-hidden="true" className="size-3" />
+      ))}
+      {label}
+    </p>
+  );
+}
 
 function formatTime(iso: string) {
   const date = new Date(iso);
@@ -54,10 +76,15 @@ export function ChatMessage({ message, onRetry }: { message: Message; onRetry: (
 
   const failed = message.status === 'error' && !message.streaming && !message.stopped;
   const notFound = NOT_FOUND.has(message.content.trim());
-  const uncited = !message.streaming && !failed && !message.stopped && message.content && !notFound && message.cited_pages.length === 0;
+  // Conversation answers have no page to cite; a BOTH answer may rely on the conversation alone.
+  const fromConversation =
+    message.query_type === 'history' || (message.query_type === 'both' && hasConversationAttribution(message.content));
+  const uncited =
+    !message.streaming && !failed && !message.stopped && message.content && !notFound && !fromConversation && message.cited_pages.length === 0;
 
   return (
     <li className="group flex flex-col items-start gap-1">
+      {message.query_type ? <SourceLabel queryType={message.query_type} /> : null}
       <div
         aria-busy={message.streaming || undefined}
         className={cn(

@@ -1,17 +1,19 @@
 // AI evaluation harness (Spec 12 §12.9). Runs the real pipeline — extractPdf → runExtraction, the
-// same code as process-contract minus the database — against live OpenAI, then scores and reports.
+// same code as process-contract minus the database — against the live Azure AI Foundry agents,
+// then scores and reports.
 //
 //   npm run eval -- [--type NDA|MSA|all] [--limit N] [--prompt-version v1] [--with-chat]
 //                   [--gate beta|launch] [--dataset evals/datasets]
 //
-// Needs OPENAI_API_KEY (read from the environment or .env.local). Never runs in unit tests.
+// Needs AZURE_API_KEY, AZURE_EXTRACTION_AGENT_ENDPOINT and (with --with-chat) AZURE_CHAT_AGENT_ENDPOINT
+// (read from the environment or .env.local). Never runs in unit tests.
 import { buildChatMessages, CHAT_SETTINGS } from '../supabase/functions/_shared/chat-context.ts';
 import { costUsd } from '../supabase/functions/_shared/cost.ts';
 import { newMeter, runExtraction } from '../supabase/functions/_shared/extraction.ts';
-import { createOpenAIComplete, createOpenAIStream } from '../supabase/functions/_shared/openai.ts';
+import { createAzureAgentComplete } from '../supabase/functions/_shared/azure-agent.ts';
 import { extractPdf } from '../supabase/functions/_shared/pdf-text.ts';
 import { parseCitations } from '../supabase/functions/_shared/pure/citations.ts';
-import { PROMPT_VERSION } from '../supabase/functions/_shared/pure/prompts-v1.ts';
+import { PROMPT_VERSION } from '../supabase/functions/_shared/pure/prompts.ts';
 import { classifyQuery } from '../supabase/functions/_shared/pure/query-classifier.ts';
 import { loadDataset, type DatasetItem } from './lib/dataset.ts';
 import { chatPasses, checkGate, resistsInjection, scoreTerm, type PredictedTerm } from './lib/metrics.ts';
@@ -62,9 +64,11 @@ async function pool<T, R>(items: T[], size: number, fn: (item: T) => Promise<R>)
 
 const INJECTION_QUESTION = 'Which law governs this agreement?';
 
-async function evaluate(item: DatasetItem & { pdfPath: string }, cfg: { apiKey: string; model: string; baseURL?: string; withChat: boolean }): Promise<ContractResult> {
-  const complete = createOpenAIComplete({ apiKey: cfg.apiKey, model: cfg.model, baseURL: cfg.baseURL, userHash: 'eval' });
-  const stream = createOpenAIStream({ apiKey: cfg.apiKey, model: cfg.model, baseURL: cfg.baseURL, userHash: 'eval' });
+type AgentConfig = { apiKey: string; extractionEndpoint: string; chatEndpoint: string | null; apiVersion?: string; model: string; withChat: boolean };
+
+async function evaluate(item: DatasetItem & { pdfPath: string }, cfg: AgentConfig): Promise<ContractResult> {
+  const complete = createAzureAgentComplete({ apiKey: cfg.apiKey, endpoint: cfg.extractionEndpoint, apiVersion: cfg.apiVersion });
+  const chat = cfg.chatEndpoint ? createAzureAgentComplete({ apiKey: cfg.apiKey, endpoint: cfg.chatEndpoint, apiVersion: cfg.apiVersion }) : null;
   const base: ContractResult = { id: item.id, contractType: item.contract_type, latencyMs: null, costUsd: null, terms: [], custom: [], chat: [], injection: null };
 
   let predictedStd = new Map<string, PredictedTerm>();
@@ -83,7 +87,7 @@ async function evaluate(item: DatasetItem & { pdfPath: string }, cfg: { apiKey: 
       meter,
     });
     base.latencyMs = Math.round(performance.now() - started);
-    base.costUsd = costUsd(cfg.model, meter.prompt, meter.cached, meter.completion).cost;
+    base.costUsd = costUsd(meter.model ?? cfg.model, meter.prompt, meter.cached, meter.completion).cost;
     const toPred = (t: (typeof terms)[number]): PredictedTerm => ({ value: t.value, page: t.page_number, confidence: t.confidence_score });
     predictedStd = new Map(terms.filter((t) => !t.is_custom).map((t) => [t.term_key, toPred(t)]));
     predictedCustom = new Map(terms.filter((t) => t.is_custom).map((t) => [t.term_name.toLowerCase(), toPred(t)]));
@@ -102,8 +106,8 @@ async function evaluate(item: DatasetItem & { pdfPath: string }, cfg: { apiKey: 
 
   const ask = async (q: string) => {
     const messages = buildChatMessages({ queryType: classifyQuery(q, []), contractType: item.contract_type, contractText: contract!.text, history: [], question: q });
-    let answer = '';
-    for await (const chunk of await stream(messages, CHAT_SETTINGS, AbortSignal.timeout(45_000))) answer += chunk.text ?? '';
+    const { content } = await chat!(messages, { ...CHAT_SETTINGS, json: false }, AbortSignal.timeout(45_000));
+    const answer = content ?? '';
     return { answer, cited: parseCitations(answer, contract!.pageCount) };
   };
 

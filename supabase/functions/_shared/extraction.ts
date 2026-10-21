@@ -1,6 +1,6 @@
 import { AppError } from './errors.ts';
 import { postProcess, type ExtractedTerm } from './extraction-postprocess.ts';
-import { withRetry, type ChatMessage, type CompleteFn, type RetryOptions } from './openai.ts';
+import { withRetry, type ChatMessage, type CompleteFn, type RetryOptions } from './llm.ts';
 import { buildExtractionMessages, REPAIR_PROMPT, type RequestedTerm } from './prompt-builder.ts';
 import { splitPages } from './pure/page-markers.ts';
 import { customTermDef, getStandardTerms, type ContractType } from './pure/term-library.ts';
@@ -20,6 +20,8 @@ export type ExtractionMeter = {
   cached: number;
   completion: number;
   openaiMs: number;
+  /** Model reported by the latest response (null until one arrives). */
+  model: string | null;
 };
 
 export const newMeter = (): ExtractionMeter => ({
@@ -29,6 +31,7 @@ export const newMeter = (): ExtractionMeter => ({
   cached: 0,
   completion: 0,
   openaiMs: 0,
+  model: null,
 });
 
 export type ExtractionResult = { terms: ExtractedTerm[]; detectedTypeMismatch: boolean };
@@ -81,6 +84,7 @@ export async function runExtraction(input: {
         meter.prompt += completion.usage.prompt;
         meter.cached += completion.usage.cached;
         meter.completion += completion.usage.completion;
+        meter.model = completion.model ?? meter.model;
         return completion;
       } finally {
         meter.openaiMs += Math.round(performance.now() - started);

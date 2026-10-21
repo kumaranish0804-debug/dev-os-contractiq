@@ -2,12 +2,14 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { expandCitation, parseCitations, splitCitations } from '@shared/citations';
+import { expandCitation, hasConversationAttribution, parseCitations, splitCitations } from '@shared/citations';
 import {
-  CHAT_SYSTEM_HISTORY_V1,
-  CHAT_SYSTEM_V1,
+  CHAT_SYSTEM_BOTH,
+  CHAT_SYSTEM_CONTRACT,
+  CHAT_SYSTEM_HISTORY,
+  PROMPT_VERSION,
   renderChatSystem,
-} from '@shared/prompts-v1';
+} from '@shared/prompts';
 import { classifyQuery } from '@shared/query-classifier';
 import { readSse } from '@/lib/api/sse';
 
@@ -36,6 +38,23 @@ describe('citations', () => {
     ]);
     expect(splitCitations('No citations.')).toEqual([{ type: 'text', value: 'No citations.' }]);
   });
+
+  it('splits [From conversation] tags alongside page citations', () => {
+    expect(splitCitations('You asked earlier [From conversation]; it renews yearly [Page 4].')).toEqual([
+      { type: 'text', value: 'You asked earlier ' },
+      { type: 'conversation' },
+      { type: 'text', value: '; it renews yearly ' },
+      { type: 'citation', page: 4 },
+      { type: 'text', value: '.' },
+    ]);
+    expect(splitCitations('Two years. [from our conversation]')).toEqual([
+      { type: 'text', value: 'Two years. ' },
+      { type: 'conversation' },
+    ]);
+    expect(parseCitations('Two years [From conversation] [Page 2]', 3)).toEqual([2]);
+    expect(hasConversationAttribution('Two years [From conversation].')).toBe(true);
+    expect(hasConversationAttribution('Two years [Page 2].')).toBe(false);
+  });
 });
 
 describe('classifyQuery', () => {
@@ -53,21 +72,35 @@ describe('classifyQuery', () => {
 });
 
 describe('chat prompts mirror the canonical files', () => {
-  const read = (f: string) => readFileSync(resolve(__dirname, '../../prompts/v1', f), 'utf8').replace(/\n$/, '');
+  const read = (f: string) =>
+    readFileSync(resolve(__dirname, '../../prompts', PROMPT_VERSION, f), 'utf8').replace(/\n$/, '');
 
-  it('matches chat-system.md and chat-system-history.md', () => {
-    expect(CHAT_SYSTEM_V1).toBe(read('chat-system.md'));
-    expect(CHAT_SYSTEM_HISTORY_V1).toBe(read('chat-system-history.md'));
+  it('matches chat-system.md, chat-system-both.md and chat-system-history.md', () => {
+    expect(PROMPT_VERSION).toBe('v1.1');
+    expect(CHAT_SYSTEM_CONTRACT).toBe(read('chat-system.md'));
+    expect(CHAT_SYSTEM_BOTH).toBe(read('chat-system-both.md'));
+    expect(CHAT_SYSTEM_HISTORY).toBe(read('chat-system-history.md'));
   });
 
-  it('renders contract and both variants, filling every placeholder', () => {
+  it('one prompt per source: contract cites pages, both attributes each fact, history ends with [From conversation]', () => {
+    expect(CHAT_SYSTEM_CONTRACT).toContain('Answer ONLY from the contract text');
+    expect(CHAT_SYSTEM_CONTRACT).toContain('[Page N]');
+    expect(CHAT_SYSTEM_BOTH).toContain('Attribute every fact to its source');
+    expect(CHAT_SYSTEM_BOTH).toContain('[From conversation] for facts from our previous messages');
+    expect(CHAT_SYSTEM_HISTORY).toContain('End your answer with [From conversation].');
+    expect(CHAT_SYSTEM_HISTORY).not.toContain('<contract>');
+  });
+
+  it('renders the contract and both prompts, filling every placeholder', () => {
     const contract = renderChatSystem({ queryType: 'contract', contractType: 'MSA', contractText: 'Fees $5 [PAGE 1]' });
     expect(contract).not.toContain('{{');
-    expect(contract).toContain('inside <contract>…</contract>. Never use');
+    expect(contract).toContain('Answer ONLY from the contract text');
     expect(contract).toContain('Contract type: MSA\n<contract>\nFees $5 [PAGE 1]\n</contract>');
 
     const both = renderChatSystem({ queryType: 'both', contractType: 'NDA', contractText: 'x' });
-    expect(both).toContain('</contract> and our previous messages in this conversation. Never use');
+    expect(both).not.toContain('{{');
+    expect(both).toContain('Attribute every fact to its source');
+    expect(both).toContain('Contract type: NDA\n<contract>\nx\n</contract>');
   });
 
   it('does not interpret $ patterns in the contract text', () => {

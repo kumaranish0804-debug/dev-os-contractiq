@@ -1,13 +1,13 @@
-import type { ChatMessage } from './openai.ts';
+import type { ChatMessage } from './llm.ts';
 import {
   buildExtractionUserMessage,
   EXTRACTION_SYSTEM_V1,
   FEW_SHOT_MSA,
   FEW_SHOT_NDA,
-} from './pure/prompts-v1.ts';
+} from './pure/prompts.ts';
 import { getStandardTerms, type ContractType, type TermDef } from './pure/term-library.ts';
 
-export { PROMPT_VERSION, REPAIR_PROMPT } from './pure/prompts-v1.ts';
+export { PROMPT_VERSION, REPAIR_PROMPT } from './pure/prompts.ts';
 
 export type RequestedTerm = TermDef & { isCustom: boolean; sortOrder: number };
 

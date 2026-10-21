@@ -1,6 +1,7 @@
 import { assert, assertEquals, assertRejects } from 'std/assert';
 import { AppError } from '../_shared/errors.ts';
 import { extractPdf } from '../_shared/pdf-text.ts';
+import { PROMPT_VERSION } from '../_shared/pure/prompts.ts';
 import { fakeContext, fakeSupabase, type FakeOptions } from '../_shared/test-utils/fake-supabase.ts';
 import {
   apiError,
@@ -9,7 +10,7 @@ import {
   loadExpected,
   scriptedComplete,
   type Step,
-} from '../_shared/test-utils/openai-mock.ts';
+} from '../_shared/test-utils/llm-mock.ts';
 import { handleProcess, type ProcessDeps } from './process.ts';
 
 const CONTRACT_ID = '22222222-2222-4222-8222-222222222222';
@@ -68,7 +69,7 @@ Deno.test('processes a contract: start → extract → save → log → 200', as
   const [save] = callsOf(fake.calls, 'rpc', 'save_extraction_results');
   assert(save?.op === 'rpc');
   assertEquals(save.args.p_user_id, 'user-1');
-  assertEquals(save.args.p_prompt_version, 'v1');
+  assertEquals(save.args.p_prompt_version, PROMPT_VERSION);
 
   const [log] = callsOf(fake.calls, 'insert', 'processing_logs');
   assert(log?.op === 'insert');
@@ -105,7 +106,7 @@ Deno.test('AI failure flips the contract to error and logs it, then rethrows', a
   assertEquals(callsOf(fake.calls, 'rpc', 'save_extraction_results').length, 0);
 });
 
-Deno.test('missing OpenAI configuration still marks the contract as error', async () => {
+Deno.test('missing Azure configuration still marks the contract as error', async () => {
   const { fake, deps } = setup([], {}, {
     createComplete: () => Promise.reject(new AppError('INTERNAL')),
   });

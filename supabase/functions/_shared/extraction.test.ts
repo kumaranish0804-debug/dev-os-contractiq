@@ -3,7 +3,7 @@ import { costUsd } from './cost.ts';
 import { AppError } from './errors.ts';
 import { buildRequestedTerms, EXTRACTION_SETTINGS, newMeter, runExtraction } from './extraction.ts';
 import { normaliseConfidence, postProcess } from './extraction-postprocess.ts';
-import { classifyOpenAIError, hashUserId, withRetry } from './openai.ts';
+import { classifyLlmError, withRetry } from './llm.ts';
 import { extractPdf } from './pdf-text.ts';
 import { buildExtractionMessages, REPAIR_PROMPT } from './prompt-builder.ts';
 import { splitPages } from './pure/page-markers.ts';
@@ -16,7 +16,7 @@ import {
   raw,
   scriptedComplete,
   timeoutError,
-} from './test-utils/openai-mock.ts';
+} from './test-utils/llm-mock.ts';
 
 const ndaText = (await extractPdf(await fixtureBytes('nda-3-pages.pdf'))).contractText;
 const msaText = (await extractPdf(await fixtureBytes('msa-6-pages.pdf'))).contractText;
@@ -47,7 +47,7 @@ Deno.test('NDA fixture: 10 standard terms in library order, verified pages', asy
 
   assertEquals(calls.length, 1);
   assertEquals(calls[0]!.options, EXTRACTION_SETTINGS);
-  assertEquals(meter, { attempts: 1, repairs: 0, prompt: 4000, cached: 1000, completion: 600, openaiMs: meter.openaiMs });
+  assertEquals(meter, { attempts: 1, repairs: 0, prompt: 4000, cached: 1000, completion: 600, openaiMs: meter.openaiMs, model: 'gpt-4o-mini' });
 });
 
 Deno.test('MSA fixture: 12 terms, plus a custom term after the standard ones', async () => {
@@ -149,7 +149,7 @@ Deno.test('timeouts on every attempt → AI_TIMEOUT', async () => {
   assertEquals(error.code, 'AI_TIMEOUT');
 });
 
-Deno.test('400 from OpenAI is not retried → INTERNAL', async () => {
+Deno.test('400 from the model is not retried → INTERNAL', async () => {
   const { complete, calls } = scriptedComplete([apiError(400)]);
   const error = await assertRejects(
     () => runExtraction({ contractText: ndaText, contractType: 'NDA', customTerms: [], complete, retry: noSleep }),
@@ -266,7 +266,7 @@ Deno.test('long values and sources are truncated to 2,000 characters', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Prompt, cost, OpenAI helpers
+// Prompt, cost, LLM helpers
 // ---------------------------------------------------------------------------
 
 Deno.test('messages: system, 3 few-shot pairs for the type, then the contract last', () => {
@@ -288,20 +288,13 @@ Deno.test('cost: gpt-4o-mini list prices, dated snapshots, unknown models', () =
   assertEquals(costUsd('gpt-4o-mini', 2000, 5000, 0).cost, 0.00015); // cached capped at prompt
 });
 
-Deno.test('classifyOpenAIError', () => {
-  assertEquals(classifyOpenAIError(apiError(429)), 'retryable');
-  assertEquals(classifyOpenAIError(apiError(502)), 'retryable');
-  assertEquals(classifyOpenAIError(apiError(401)), 'fatal');
-  assertEquals(classifyOpenAIError(timeoutError()), 'timeout');
-  assertEquals(classifyOpenAIError(Object.assign(new Error('x'), { name: 'APIConnectionError' })), 'retryable');
-  assertEquals(classifyOpenAIError(new TypeError('boom')), 'fatal');
-});
-
-Deno.test('hashUserId is a salted, stable SHA-256 hex', async () => {
-  const a = await hashUserId('user-1', 'salt');
-  assertEquals(a.length, 64);
-  assertEquals(a, await hashUserId('user-1', 'salt'));
-  assert(a !== (await hashUserId('user-1', 'other-salt')));
+Deno.test('classifyLlmError', () => {
+  assertEquals(classifyLlmError(apiError(429)), 'retryable');
+  assertEquals(classifyLlmError(apiError(502)), 'retryable');
+  assertEquals(classifyLlmError(apiError(401)), 'fatal');
+  assertEquals(classifyLlmError(timeoutError()), 'timeout');
+  assertEquals(classifyLlmError(Object.assign(new Error('x'), { name: 'APIConnectionError' })), 'retryable');
+  assertEquals(classifyLlmError(new TypeError('boom')), 'fatal');
 });
 
 Deno.test('the injection fixture keeps its instruction inside the contract delimiters', async () => {
