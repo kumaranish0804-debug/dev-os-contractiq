@@ -1,0 +1,52 @@
+# Nightly AI eval + release gate (Spec 12 §12.10). Live OpenAI — needs the OPENAI_API_KEY secret.
+name: eval
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      gate:
+        description: Gate to enforce
+        type: choice
+        options: [beta, launch]
+        default: beta
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-4o-mini' }}
+      SLACK_ALERT_WEBHOOK_URL: ${{ secrets.SLACK_ALERT_WEBHOOK_URL }}
+      GATE: ${{ startsWith(github.ref, 'refs/tags/v') && 'launch' || inputs.gate || 'beta' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Skip without an OpenAI key
+        id: guard
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then echo "skip=true" >> "$GITHUB_OUTPUT"; echo "::notice::OPENAI_API_KEY not set — eval skipped"; fi
+      - name: Run eval
+        id: run
+        if: steps.guard.outputs.skip != 'true'
+        run: >
+          deno run --config supabase/functions/deno.json --allow-env --allow-read --allow-write --allow-net
+          evals/run-eval.ts --type all --with-chat --gate "$GATE"
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.guard.outputs.skip != 'true'
+        with:
+          name: eval-report
+          path: evals/reports/
+      - name: Post summary to Slack
+        if: always() && steps.guard.outputs.skip != 'true' && env.SLACK_ALERT_WEBHOOK_URL != ''
+        run: |
+          REPORT=$(ls -t evals/reports/*.md | head -1)
+          SUMMARY=$(sed -n '1,/^## Per-term/p' "$REPORT" | head -n -1)
+          STATUS="${{ steps.run.outcome }}"
+          jq -n --arg text "ContractIQ eval ($GATE gate: $STATUS)"$'\n'"$SUMMARY" '{text: $text}' \
+            | curl -sf -X POST -H 'Content-Type: application/json' --data @- "$SLACK_ALERT_WEBHOOK_URL"

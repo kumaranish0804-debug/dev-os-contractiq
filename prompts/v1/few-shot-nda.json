@@ -1,0 +1,95 @@
+[
+  {
+    "requested": [
+      "parties",
+      "governing_law",
+      "term_and_duration"
+    ],
+    "contract": "[PAGE 1]\nMUTUAL NON-DISCLOSURE AGREEMENT\nThis Mutual Non-Disclosure Agreement is entered into by Brightline Analytics Ltd. (\"Brightline\") and Torus Health Inc. (\"Torus\").\n\n[PAGE 2]\n7. Term. This Agreement remains in effect for two (2) years from the Effective Date. The obligations of confidentiality shall survive for three (3) years following termination.\n8. This Agreement shall be governed by the laws of England and Wales.",
+    "output": {
+      "terms": [
+        {
+          "term_key": "parties",
+          "term_name": "Parties",
+          "value": "Mutual NDA between Brightline Analytics Ltd. and Torus Health Inc.",
+          "page_number": 1,
+          "source_sentence": "This Mutual Non-Disclosure Agreement is entered into by Brightline Analytics Ltd. (\"Brightline\") and Torus Health Inc. (\"Torus\").",
+          "confidence_score": 0.97
+        },
+        {
+          "term_key": "governing_law",
+          "term_name": "Governing Law",
+          "value": "Laws of England and Wales.",
+          "page_number": 2,
+          "source_sentence": "8. This Agreement shall be governed by the laws of England and Wales.",
+          "confidence_score": 0.98
+        },
+        {
+          "term_key": "term_and_duration",
+          "term_name": "Term & Duration",
+          "value": "2 years from the Effective Date; confidentiality survives 3 years after termination.",
+          "page_number": 2,
+          "source_sentence": "The obligations of confidentiality shall survive for three (3) years following termination.",
+          "confidence_score": 0.9
+        }
+      ],
+      "detected_contract_type": "NDA"
+    }
+  },
+  {
+    "requested": [
+      "non_solicitation",
+      "jurisdiction"
+    ],
+    "contract": "[PAGE 1]\nCONFIDENTIALITY AGREEMENT\n4. Recipient shall hold Confidential Information in strict confidence using no less than reasonable care.\n\n[PAGE 2]\n9. Any action arising out of this Agreement shall be brought exclusively in the state or federal courts located in Santa Clara County, California.",
+    "output": {
+      "terms": [
+        {
+          "term_key": "non_solicitation",
+          "term_name": "Non-Solicitation",
+          "value": null,
+          "page_number": null,
+          "source_sentence": null,
+          "confidence_score": 0
+        },
+        {
+          "term_key": "jurisdiction",
+          "term_name": "Jurisdiction",
+          "value": "Exclusively the state or federal courts in Santa Clara County, California.",
+          "page_number": 2,
+          "source_sentence": "9. Any action arising out of this Agreement shall be brought exclusively in the state or federal courts located in Santa Clara County, California.",
+          "confidence_score": 0.95
+        }
+      ],
+      "detected_contract_type": "NDA"
+    }
+  },
+  {
+    "requested": [
+      "breach_and_remedy",
+      "permitted_disclosures"
+    ],
+    "contract": "[PAGE 1]\n5. Recipient may disclose Confidential Information to its employees who need to know it, provided they are bound by obligations at least as protective as these.\n6. Each party acknowledges that a breach may cause irreparable harm and the disclosing party may seek equitable relief in addition to other remedies.",
+    "output": {
+      "terms": [
+        {
+          "term_key": "breach_and_remedy",
+          "term_name": "Breach & Remedy",
+          "value": "Disclosing party may seek equitable (injunctive) relief in addition to other remedies.",
+          "page_number": 1,
+          "source_sentence": "6. Each party acknowledges that a breach may cause irreparable harm and the disclosing party may seek equitable relief in addition to other remedies.",
+          "confidence_score": 0.86
+        },
+        {
+          "term_key": "permitted_disclosures",
+          "term_name": "Permitted Disclosures",
+          "value": "Employees with a need to know who are bound by equally protective obligations.",
+          "page_number": 1,
+          "source_sentence": "5. Recipient may disclose Confidential Information to its employees who need to know it, provided they are bound by obligations at least as protective as these.",
+          "confidence_score": 0.92
+        }
+      ],
+      "detected_contract_type": "NDA"
+    }
+  }
+]

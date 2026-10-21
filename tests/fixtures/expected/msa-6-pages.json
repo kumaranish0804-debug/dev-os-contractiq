@@ -1,0 +1,66 @@
+{
+  "contract_type": "MSA",
+  "page_count": 6,
+  "terms": {
+    "parties": {
+      "value": "Northwind Retail Group plc (Customer) and Cobalt Cloud Services Ltd (Provider)",
+      "page": 1,
+      "source_sentence": "This Master Services Agreement (the \"Agreement\") is made on April 15, 2026 between Northwind Retail Group plc (\"Customer\") and Cobalt Cloud Services Ltd (\"Provider\")."
+    },
+    "service_scope": {
+      "value": "Cloud infrastructure management, monitoring and support services defined in SOWs",
+      "page": 1,
+      "source_sentence": "Provider shall provide the cloud infrastructure management, monitoring and support services described in one or more Statements of Work executed by the parties (each a \"SOW\")."
+    },
+    "payment_terms": {
+      "value": "Fixed monthly fees per SOW; net 30 days, in US dollars by bank transfer",
+      "page": 2,
+      "source_sentence": "All undisputed invoices are payable within thirty (30) days of the invoice date (net 30), in US dollars, by bank transfer."
+    },
+    "invoice_schedule": {
+      "value": "Monthly in advance on the first business day of each month",
+      "page": 2,
+      "source_sentence": "Provider shall invoice Customer monthly in advance on the first business day of each calendar month."
+    },
+    "late_payment_penalty": {
+      "value": "1.5% interest per month; suspension if unpaid 15 days after notice",
+      "page": 2,
+      "source_sentence": "Any amount not paid when due shall accrue interest at the rate of 1.5% per month, or the maximum rate permitted by law if lower."
+    },
+    "liability_cap": {
+      "value": "Total fees paid in the preceding 12 months; no indirect or consequential damages",
+      "page": 3,
+      "source_sentence": "Except for breaches of confidentiality and each party's indemnification obligations, each party's total aggregate liability arising out of or relating to this Agreement shall not exceed the total fees paid by Customer in the twelve (12) months preceding the event giving rise to the claim."
+    },
+    "indemnification": {
+      "value": "Provider indemnifies Customer against third-party IP infringement claims",
+      "page": 4,
+      "source_sentence": "Provider shall defend, indemnify and hold harmless Customer from and against any third-party claim alleging that the Services infringe any intellectual property right, provided that Customer promptly notifies Provider of the claim, gives Provider sole control of the defence, and provides reasonable cooperation."
+    },
+    "ip_ownership": {
+      "value": "Customer owns deliverables on full payment; Provider keeps pre-existing IP with a perpetual licence to Customer",
+      "page": 4,
+      "source_sentence": "Customer shall own all deliverables created specifically for Customer under a SOW upon full payment."
+    },
+    "termination_clause": {
+      "value": "Convenience on 90 days' notice; immediate for uncured material breach after 30 days",
+      "page": 5,
+      "source_sentence": "Either party may terminate this Agreement for convenience on ninety (90) days' written notice."
+    },
+    "notice_period": {
+      "value": "Written notice by hand, courier or email; 60 days before SOW renewal for non-renewal",
+      "page": 5,
+      "source_sentence": "Notice of non-renewal of any SOW must be given at least sixty (60) days before its renewal date."
+    },
+    "governing_law": {
+      "value": "England and Wales",
+      "page": 6,
+      "source_sentence": "This Agreement is governed by the laws of England and Wales."
+    },
+    "dispute_resolution": {
+      "value": "30 days of executive negotiation, then LCIA arbitration seated in London with one arbitrator",
+      "page": 6,
+      "source_sentence": "Any dispute not so resolved shall be finally resolved by arbitration under the LCIA Rules, seated in London, before a single arbitrator."
+    }
+  }
+}

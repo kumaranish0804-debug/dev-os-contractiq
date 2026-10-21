@@ -1,0 +1,56 @@
+{
+  "contract_type": "NDA",
+  "page_count": 3,
+  "terms": {
+    "parties": {
+      "value": "Acme Robotics, Inc. and Brightline Analytics LLC (mutual)",
+      "page": 1,
+      "source_sentence": "This Mutual Non-Disclosure Agreement (the \"Agreement\") is entered into as of March 1, 2026 (the \"Effective Date\") by and between Acme Robotics, Inc., a Delaware corporation, and Brightline Analytics LLC, a New York limited liability company (each a \"Party\" and together the \"Parties\")."
+    },
+    "effective_date": {
+      "value": "March 1, 2026",
+      "page": 1,
+      "source_sentence": "This Mutual Non-Disclosure Agreement (the \"Agreement\") is entered into as of March 1, 2026 (the \"Effective Date\") by and between Acme Robotics, Inc., a Delaware corporation, and Brightline Analytics LLC, a New York limited liability company (each a \"Party\" and together the \"Parties\")."
+    },
+    "confidentiality_obligations": {
+      "value": "Hold in strict confidence, use solely for the Purpose, protect with at least reasonable care",
+      "page": 1,
+      "source_sentence": "The receiving Party shall hold the disclosing Party's Confidential Information in strict confidence, shall use it solely for the Purpose, and shall protect it using at least the same degree of care it uses to protect its own confidential information, but in no event less than reasonable care."
+    },
+    "permitted_disclosures": {
+      "value": "Employees, officers and advisers with a need to know; public information; disclosures required by law with prompt notice",
+      "page": 2,
+      "source_sentence": "The receiving Party may disclose Confidential Information only to its employees, officers and professional advisers who need to know it for the Purpose and who are bound by written confidentiality obligations no less protective than this Agreement."
+    },
+    "term_and_duration": {
+      "value": "2 years from the Effective Date; confidentiality survives 3 years after expiry or termination",
+      "page": 2,
+      "source_sentence": "The obligations of confidentiality shall survive for three (3) years after the expiration or termination of this Agreement."
+    },
+    "ip_ownership": {
+      "value": "Disclosing Party retains ownership; no licence granted",
+      "page": 2,
+      "source_sentence": "Nothing in this Agreement grants the receiving Party any license or other right in any patent, copyright, trade secret or other intellectual property of the disclosing Party, except the limited right to use Confidential Information for the Purpose."
+    },
+    "non_solicitation": {
+      "value": "No soliciting employees during the term and for 12 months after",
+      "page": 2,
+      "source_sentence": "During the term of this Agreement and for twelve (12) months thereafter, neither Party shall directly solicit for employment any employee of the other Party with whom it had contact in connection with the Purpose."
+    },
+    "breach_and_remedy": {
+      "value": "Injunctive relief plus other legal remedies; return or destroy information on request",
+      "page": 3,
+      "source_sentence": "Accordingly, the disclosing Party shall be entitled to seek injunctive relief, in addition to any other remedies available at law or in equity."
+    },
+    "governing_law": {
+      "value": "State of New York",
+      "page": 3,
+      "source_sentence": "This Agreement shall be governed by and construed in accordance with the laws of the State of New York, without regard to its conflict of laws principles."
+    },
+    "jurisdiction": {
+      "value": "State and federal courts in New York County, New York (exclusive)",
+      "page": 3,
+      "source_sentence": "Each Party irrevocably submits to the exclusive jurisdiction of the state and federal courts located in New York County, New York, for any action arising out of or relating to this Agreement."
+    }
+  }
+}

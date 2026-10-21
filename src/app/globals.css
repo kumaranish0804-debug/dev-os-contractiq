@@ -1,0 +1,160 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Design tokens — values from docs/design.md ("CSS Custom Properties Setup").
+   Components use the semantic tokens below via Tailwind classes, never the primitives. */
+:root {
+  /* Grey */
+  --color-grey-900: #070a0e;
+  --color-grey-800: #151719;
+  --color-grey-700: #25272b;
+  --color-grey-600: #2c2f32;
+  --color-grey-500: #4a4c4f;
+  --color-grey-400: #5e6062;
+  --color-grey-300: #8f9193;
+  --color-grey-200: #c1c2c3;
+  --color-grey-100: #dadadb;
+  --color-grey-50: #f0f0f1;
+  --color-grey-25: #fafafa;
+
+  /* Blue */
+  --color-blue-900: #082a5e;
+  --color-blue-800: #0a367b;
+  --color-blue-700: #0d469e;
+  --color-blue-600: #0044ae;
+  --color-blue-500: #115acb;
+  --color-blue-400: #89b7ff;
+  --color-blue-300: #6196ea;
+  --color-blue-200: #92b7f0;
+  --color-blue-100: #b6cff5;
+  --color-blue-50: #e7effc;
+
+  /* Green */
+  --color-green-900: #084406;
+  --color-green-800: #0a5908;
+  --color-green-700: #0d720a;
+  --color-green-600: #11930d;
+  --color-green-500: #13a10e;
+  --color-green-400: #42b43e;
+  --color-green-300: #61c05e;
+  --color-green-200: #92d490;
+  --color-green-100: #b6e2b4;
+  --color-green-50: #e7f6e7;
+
+  /* Red */
+  --color-red-900: #581618;
+  --color-red-800: #731d1f;
+  --color-red-700: #942528;
+  --color-red-600: #be2f33;
+  --color-red-500: #d13438;
+  --color-red-400: #da5d60;
+  --color-red-300: #e0777a;
+  --color-red-200: #eaa2a3;
+  --color-red-100: #f1c0c1;
+  --color-red-50: #faebeb;
+
+  /* Yellow */
+  --color-yellow-900: #854d00;
+  --color-yellow-800: #b36800;
+  --color-yellow-700: #db8000;
+  --color-yellow-600: #fa9200;
+  --color-yellow-500: #ffaa33;
+  --color-yellow-400: #ffc16b;
+  --color-yellow-300: #ffd294;
+  --color-yellow-200: #ffe3bd;
+  --color-yellow-100: #fff2e0;
+  --color-yellow-50: #fff9f0;
+
+  /* Violet */
+  --color-violet-900: #380070;
+  --color-violet-800: #5700ad;
+  --color-violet-700: #6600cc;
+  --color-violet-600: #7000e0;
+  --color-violet-500: #7f00ff;
+  --color-violet-400: #b870ff;
+  --color-violet-300: #d1a3ff;
+  --color-violet-200: #e3c7ff;
+  --color-violet-100: #f2e5ff;
+  --color-violet-50: #f7f0ff;
+
+  /* Orange */
+  --color-orange-900: #802400;
+  --color-orange-800: #b33300;
+  --color-orange-700: #d63d00;
+  --color-orange-600: #e63900;
+  --color-orange-500: #ff4405;
+  --color-orange-400: #ff956b;
+  --color-orange-300: #ffba9e;
+  --color-orange-200: #ffd3c2;
+  --color-orange-100: #ffe9e0;
+  --color-orange-50: #fff4f0;
+
+  /* Semantic tokens */
+  --text-primary: var(--color-grey-900);
+  --text-secondary: var(--color-grey-500);
+  --bg-primary: #ffffff;
+  --bg-surface: var(--color-grey-25);
+  --bg-subtle: var(--color-grey-50);
+  --brand: var(--color-blue-500);
+  --brand-hover: var(--color-blue-600);
+  --brand-subtle: var(--color-blue-50);
+
+  --border-default: var(--color-grey-100);
+  --border-strong: var(--color-grey-200);
+  --focus-ring: var(--color-blue-500);
+
+  /* Status tokens. Warning text is Yellow 900 (not 700) for WCAG AA contrast — see Spec 01 §1.4 */
+  --success-bg: var(--color-green-50);
+  --success-border: var(--color-green-200);
+  --success-text: var(--color-green-700);
+  --warning-bg: var(--color-yellow-50);
+  --warning-border: var(--color-yellow-200);
+  --warning-text: var(--color-yellow-900);
+  --error-bg: var(--color-red-50);
+  --error-border: var(--color-red-200);
+  --error-text: var(--color-red-700);
+  --info-bg: var(--color-blue-50);
+  --info-border: var(--color-blue-200);
+  --info-text: var(--color-blue-700);
+  --highlight-bg: var(--color-yellow-100);
+
+  /* Radius & motion */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --duration-fast: 100ms;
+  --duration-base: 150ms;
+  --duration-panel: 200ms;
+}
+
+/* PDF text-layer sentence highlight (Spec 08 §8.5). The text layer is transparent over the
+   canvas, so only the background shows. */
+.cq-mark {
+  background: var(--highlight-bg);
+  color: transparent;
+  border-radius: 2px;
+}
+
+@layer base {
+  body {
+    @apply bg-bg-surface font-sans text-body-lg text-text-primary antialiased;
+    letter-spacing: 0;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "id": "synthetic-nda-3-pages",
+  "contract_type": "NDA",
+  "pdf": "../../../tests/fixtures/nda-3-pages.pdf",
+  "jurisdiction": "US-NY",
+  "terms": {
+    "parties": {
+      "value": "Acme Robotics, Inc. and Brightline Analytics LLC (mutual)",
+      "page": 1
+    },
+    "effective_date": {
+      "value": "March 1, 2026",
+      "page": 1
+    },
+    "confidentiality_obligations": {
+      "value": "Hold in strict confidence, use solely for the Purpose, protect with at least reasonable care",
+      "page": 1
+    },
+    "permitted_disclosures": {
+      "value": "Employees, officers and advisers with a need to know; public information; disclosures required by law with prompt notice",
+      "page": 2
+    },
+    "term_and_duration": {
+      "value": "2 years from the Effective Date; confidentiality survives 3 years after expiry or termination",
+      "page": 2
+    },
+    "ip_ownership": {
+      "value": "Disclosing Party retains ownership; no licence granted",
+      "page": 2
+    },
+    "non_solicitation": {
+      "value": "No soliciting employees during the term and for 12 months after",
+      "page": 2
+    },
+    "breach_and_remedy": {
+      "value": "Injunctive relief plus other legal remedies; return or destroy information on request",
+      "page": 3
+    },
+    "governing_law": {
+      "value": "State of New York",
+      "page": 3
+    },
+    "jurisdiction": {
+      "value": "State and federal courts in New York County, New York (exclusive)",
+      "page": 3
+    }
+  },
+  "chat": [
+    {
+      "q": "Which law governs this agreement?",
+      "expect": "grounded",
+      "pages": [
+        3
+      ]
+    },
+    {
+      "q": "What is the purchase price for the company shares?",
+      "expect": "not_found"
+    }
+  ]
+}

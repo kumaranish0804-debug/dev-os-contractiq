@@ -1,0 +1,42 @@
+# Supabase CLI configuration (local development). Unlisted settings use CLI defaults.
+project_id = "contractiq"
+
+[api]
+port = 54321
+
+[db]
+port = 54322
+major_version = 15
+
+[studio]
+port = 54323
+
+[inbucket]
+port = 54324
+
+[auth]
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:3000/auth/callback"]
+
+[auth.email]
+enable_confirmations = true
+
+[functions.upload-contract]
+verify_jwt = true
+import_map = "./functions/deno.json"
+
+[functions.process-contract]
+verify_jwt = true
+import_map = "./functions/deno.json"
+
+[functions.chat]
+verify_jwt = true
+import_map = "./functions/deno.json"
+
+[functions.retention-cleanup]
+verify_jwt = false # authenticated by x-cron-secret header
+import_map = "./functions/deno.json"
+
+[functions.daily-alerts]
+verify_jwt = false # authenticated by x-cron-secret header
+import_map = "./functions/deno.json"

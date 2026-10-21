@@ -1,0 +1,12 @@
+{
+  "extends": ["next/core-web-vitals", "prettier"],
+  "rules": {
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "Literal[value=/#[0-9a-fA-F]{6}\\b/]",
+        "message": "Use design tokens, not hex colours."
+      }
+    ]
+  }
+}

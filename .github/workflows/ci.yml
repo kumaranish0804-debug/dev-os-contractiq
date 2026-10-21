@@ -1,0 +1,106 @@
+# CI (Spec 12 §12.10). Integration and E2E run against the Supabase project named in repository
+# secrets (Stage 5 decision: hosted project + throwaway users, swept after each run) instead of a
+# local `supabase start`. Jobs that need those secrets are skipped when they aren't configured.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+  NEXT_PUBLIC_SITE_URL: http://localhost:3000
+  NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - name: Unit tests + coverage thresholds
+        run: npm run test:coverage
+      - name: Edge Function + eval harness tests (Deno)
+        run: npm run test:functions
+      - name: Production build
+        run: npm run build
+        env:
+          # The build only inlines public values; placeholders keep it independent of secrets.
+          NEXT_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key-not-real
+
+  integration:
+    needs: checks
+    if: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    # One run at a time: the suites share the test project.
+    concurrency: supabase-test-project
+    env:
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Skip without test-project secrets
+        id: guard
+        run: |
+          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then echo "skip=true" >> "$GITHUB_OUTPUT"; echo "::notice::TEST_SUPABASE_* secrets not set — integration skipped"; fi
+      - name: Integration + RLS
+        if: steps.guard.outputs.skip != 'true'
+        run: npm run test:integration
+
+  e2e:
+    needs: integration
+    if: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    concurrency: supabase-test-project
+    env:
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
+      # Run the AI flows only once the functions are deployed with a key.
+      E2E_AI: ${{ vars.E2E_AI }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Skip without test-project secrets
+        id: guard
+        run: |
+          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then echo "skip=true" >> "$GITHUB_OUTPUT"; echo "::notice::TEST_SUPABASE_* secrets not set — E2E skipped"; fi
+      - name: Generate the large (uncommitted) fixture
+        if: steps.guard.outputs.skip != 'true'
+        run: npm run fixtures
+      - name: Install browsers
+        if: steps.guard.outputs.skip != 'true'
+        run: npx playwright install --with-deps chromium firefox
+      - name: Playwright (builds and serves on :3000, the origin the Edge Functions allow)
+        if: steps.guard.outputs.skip != 'true'
+        run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

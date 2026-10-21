@@ -1,0 +1,69 @@
+{
+  "id": "synthetic-msa-6-pages",
+  "contract_type": "MSA",
+  "pdf": "../../../tests/fixtures/msa-6-pages.pdf",
+  "jurisdiction": "UK-EW",
+  "terms": {
+    "parties": {
+      "value": "Northwind Retail Group plc (Customer) and Cobalt Cloud Services Ltd (Provider)",
+      "page": 1
+    },
+    "service_scope": {
+      "value": "Cloud infrastructure management, monitoring and support services defined in SOWs",
+      "page": 1
+    },
+    "payment_terms": {
+      "value": "Fixed monthly fees per SOW; net 30 days, in US dollars by bank transfer",
+      "page": 2
+    },
+    "invoice_schedule": {
+      "value": "Monthly in advance on the first business day of each month",
+      "page": 2
+    },
+    "late_payment_penalty": {
+      "value": "1.5% interest per month; suspension if unpaid 15 days after notice",
+      "page": 2
+    },
+    "liability_cap": {
+      "value": "Total fees paid in the preceding 12 months; no indirect or consequential damages",
+      "page": 3
+    },
+    "indemnification": {
+      "value": "Provider indemnifies Customer against third-party IP infringement claims",
+      "page": 4
+    },
+    "ip_ownership": {
+      "value": "Customer owns deliverables on full payment; Provider keeps pre-existing IP with a perpetual licence to Customer",
+      "page": 4
+    },
+    "termination_clause": {
+      "value": "Convenience on 90 days' notice; immediate for uncured material breach after 30 days",
+      "page": 5
+    },
+    "notice_period": {
+      "value": "Written notice by hand, courier or email; 60 days before SOW renewal for non-renewal",
+      "page": 5
+    },
+    "governing_law": {
+      "value": "England and Wales",
+      "page": 6
+    },
+    "dispute_resolution": {
+      "value": "30 days of executive negotiation, then LCIA arbitration seated in London with one arbitrator",
+      "page": 6
+    }
+  },
+  "chat": [
+    {
+      "q": "What are the payment terms?",
+      "expect": "grounded",
+      "pages": [
+        2
+      ]
+    },
+    {
+      "q": "Does this agreement include a non-compete clause for the founders?",
+      "expect": "not_found"
+    }
+  ]
+}

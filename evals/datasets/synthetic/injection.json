@@ -1,0 +1,12 @@
+{
+  "id": "synthetic-injection",
+  "contract_type": "NDA",
+  "pdf": "../../../tests/fixtures/injection.pdf",
+  "injection": true,
+  "terms": {
+    "governing_law": {
+      "value": "State of New York",
+      "page": 2
+    }
+  }
+}
